@@ -1,76 +1,137 @@
-# Kasa Scan
+# kasa-scan
 
-Discover TP-Link Kasa smart home devices on your local network and list their names, MAC addresses, and IPs — no cloud account or API keys required.
+Discover, monitor, and control TP-Link Kasa smart home devices from the command line. Everything runs locally over your LAN — no cloud account needed.
+
+## Install
+
+```bash
+git clone https://github.com/JeremyWhittaker/kasa_scan.git
+cd kasa_scan
+pip install -e .
+```
+
+You can now run `kasa-scan` from anywhere. Or run directly with `python kasa_scan.py`.
 
 ## Quick Start
 
 ```bash
-pip install -r requirements.txt
-python kasa_scan.py
+kasa-scan                              # scan and list all devices
+kasa-scan on "office sconce"           # turn on by name (partial match)
+kasa-scan off 192.168.1.163            # turn off by IP
+kasa-scan toggle "kitchen"             # toggle power state
+kasa-scan watch                        # live-updating monitor
+```
+
+## Commands
+
+### `scan` (default)
+
+Discover all Kasa devices on the network.
+
+```bash
+kasa-scan scan                         # table view (default)
+kasa-scan scan --energy                # include power/voltage/current
+kasa-scan scan -f json                 # JSON output
+kasa-scan scan -f csv -o devices.csv   # export CSV to file
+kasa-scan scan --filter "office"       # filter by name
+kasa-scan scan --type plug             # filter by device type
+kasa-scan scan --ip 192.168.1.126      # query a single device
+kasa-scan scan --sort ip               # sort by ip, mac, model, or type
+kasa-scan scan -t 10                   # longer timeout for large networks
 ```
 
 Example output:
 
 ```
-Found 3 Kasa device(s):
+Found 14 Kasa device(s):
 
-Device Name                         MAC Address          IP Address       Model
--------------------------------------------------------------------------------------
-Kitchen Desk Light                  50:91:E3:44:A0:DA    192.168.1.126    KL125
-Office Sconce Left                  98:25:4A:5F:4E:6F    192.168.1.163    HS200
-Office Sconce Right                 98:25:4A:5F:4E:CB    192.168.1.162    HS200
+Device Name                     MAC                 IP Address        Model       State  RSSI
+──────────────────────────────────────────────────────────────────────────────────────────────
+Dining Room Light               50:91:E3:44:A1:2B   192.168.1.110     KL125       ON     -45
+Kitchen Desk Light              50:91:E3:44:A0:DA   192.168.1.126     KL125       OFF    -52
+Office Sconce Left              98:25:4A:5F:4E:6F   192.168.1.163     HS200       ON     -38
+Office Sconce Right             98:25:4A:5F:4E:CB   192.168.1.162     HS200       ON     -41
 ```
 
-## Usage
+### `on` / `off` / `toggle`
 
-```
-usage: kasa_scan [-h] [-f {table,json,csv}] [-o FILE] [-t TIMEOUT]
-
-Discover TP-Link Kasa devices on the local network.
-
-options:
-  -h, --help            show this help message and exit
-  -f, --format {table,json,csv}
-                        Output format (default: table)
-  -o, --output FILE     Write output to FILE instead of stdout
-  -t, --timeout TIMEOUT Discovery timeout in seconds (default: 5)
-```
-
-### Examples
+Control devices by name (partial, case-insensitive) or IP address.
 
 ```bash
-# Default table view
-python kasa_scan.py
-
-# Export to JSON
-python kasa_scan.py -f json
-
-# Export to CSV file
-python kasa_scan.py -f csv -o devices.csv
-
-# Longer timeout for large networks
-python kasa_scan.py -t 10
+kasa-scan on "office sconce left"      # exact name
+kasa-scan off "kitchen"                # partial match
+kasa-scan toggle 192.168.1.126         # by IP
 ```
 
-## How It Works
+If multiple devices match a partial name, you'll be asked to be more specific.
 
-The script uses the [python-kasa](https://github.com/python-kasa/python-kasa) library to send UDP broadcast packets on port 9999. Kasa devices on the same LAN respond with their system info (name, MAC, model, etc.). Everything stays local — no TP-Link cloud account needed.
+### `watch`
+
+Live-updating display that rescans at a set interval.
+
+```bash
+kasa-scan watch                        # refresh every 5 seconds
+kasa-scan watch -i 10                  # refresh every 10 seconds
+kasa-scan watch --energy               # include power draw
+```
+
+### `baseline` / `diff`
+
+Save a snapshot of your devices, then compare later to detect new, missing, or changed devices.
+
+```bash
+kasa-scan baseline                     # save current state
+# ... time passes, devices change ...
+kasa-scan diff                         # compare to saved baseline
+```
+
+Example diff output:
+
+```
+Baseline : 2026-02-24T20:00:00+00:00  (14 devices)
+Current  : 2026-02-25T08:30:00+00:00  (15 devices)
+
+  + 1 NEW device(s):
+    + Guest Room Lamp  A0:B1:C2:D3:E4:F5  192.168.1.180
+
+  ~ 1 IP change(s):
+    ~ Kitchen Desk Light: 192.168.1.126 → 192.168.1.130
+```
+
+## Running CSV Log
+
+Every scan automatically saves results to `~/.kasa_scan/`:
+
+| File | Contents |
+|---|---|
+| `devices.csv` | Latest snapshot (overwritten each scan) |
+| `scan_log.csv` | Append-only history with timestamps |
+
+## Energy Monitoring
+
+Devices with built-in energy meters (HS110, HS300, KP115, etc.) report real-time power data when you use the `--energy` flag:
+
+```bash
+kasa-scan scan --energy
+kasa-scan watch --energy
+```
+
+Columns: **Watts**, **Volts**, **Amps**, **kWh** (cumulative).
 
 ## Requirements
 
 - Python 3.10+
-- `python-kasa` (installed via `requirements.txt`)
-- Same network as your Kasa devices
+- Same LAN as your Kasa devices
 - UDP port 9999 not blocked by firewall
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| No devices found | Make sure you're on the same WiFi/LAN as the devices |
-| Permission denied | Try running with `sudo` |
-| Timeout errors | Increase timeout with `-t 10` |
-| Partial results | Some newer devices require KLAP authentication — update `python-kasa` |
+| No devices found | Confirm you're on the same WiFi/LAN |
+| Permission denied | Try `sudo kasa-scan` |
+| Timeout / partial results | Increase timeout: `-t 10` |
+| Authentication errors | Some newer devices need KLAP auth — update python-kasa |
 
 ## License
 

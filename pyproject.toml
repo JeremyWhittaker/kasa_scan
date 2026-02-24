@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kasa-scan"
+version = "2.0.0"
+description = "Discover, monitor, and control TP-Link Kasa smart home devices"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "python-kasa>=0.7.0",
+]
+
+[project.scripts]
+kasa-scan = "kasa_scan:main"
+
+[tool.setuptools]
+py-modules = ["kasa_scan"]
